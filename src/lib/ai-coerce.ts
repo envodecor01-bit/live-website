@@ -57,7 +57,7 @@ export const tolerantStringArray = () =>
         return null;
       })
       .filter((x): x is string => typeof x === "string" && x.length > 0);
-  }, z.array(z.string()));
+  }, z.array(z.any())).transform((arr) => arr as string[]);
 
 export const tolerantHex = (fallback = "#a78bfa") =>
   z.preprocess((v) => {
