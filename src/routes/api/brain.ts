@@ -19,47 +19,14 @@ const SECTION_KINDS = ["text", "stats", "gallery", "game", "feature", "code", "c
 const MOTIONS = ["low", "normal", "high"] as const;
 const DENSITIES = ["compact", "normal", "airy"] as const;
 
-function getProviders() {
+function pickProvider() {
   const env = process.env;
-  const providers = [];
-  if (env.GROQ_API_KEY) providers.push({ name: "groq" as const, apiKey: env.GROQ_API_KEY, baseURL: "https://api.groq.com/openai/v1", model: env.GROQ_MODEL || "llama3-70b-8192" });
-  if (env.HUGGINGFACE_API_KEY) providers.push({ name: "huggingface" as const, apiKey: env.HUGGINGFACE_API_KEY, baseURL: "https://router.huggingface.co/v1", model: env.HUGGINGFACE_MODEL || "meta-llama/Llama-3.3-70B-Instruct" });
-  if (env.OPENROUTER_API_KEY) providers.push({ name: "openrouter" as const, apiKey: env.OPENROUTER_API_KEY, baseURL: "https://openrouter.ai/api/v1", model: env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free" });
-  if (env.XAI_API_KEY) providers.push({ name: "xai" as const, apiKey: env.XAI_API_KEY, baseURL: "https://api.x.ai/v1", model: env.XAI_MODEL || "grok-2-latest" });
-  return providers;
+  if (env.HUGGINGFACE_API_KEY) return { name: "huggingface" as const, apiKey: env.HUGGINGFACE_API_KEY, baseURL: "https://router.huggingface.co/v1", model: env.HUGGINGFACE_MODEL || "meta-llama/Llama-3.3-70B-Instruct" };
+  if (env.GROQ_API_KEY) return { name: "groq" as const, apiKey: env.GROQ_API_KEY, baseURL: "https://api.groq.com/openai/v1", model: env.GROQ_MODEL || "llama3-70b-8192" };
+  if (env.OPENROUTER_API_KEY) return { name: "openrouter" as const, apiKey: env.OPENROUTER_API_KEY, baseURL: "https://openrouter.ai/api/v1", model: env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free" };
+  if (env.XAI_API_KEY) return { name: "xai" as const, apiKey: env.XAI_API_KEY, baseURL: "https://api.x.ai/v1", model: env.XAI_MODEL || "grok-2-latest" };
+  return null;
 }
-
-const createFallbackModel = (models: any[]) => {
-  if (models.length === 0) throw new Error("No models provided");
-  const primary = models[0];
-  return {
-    specificationVersion: "v1",
-    provider: "fallback-provider",
-    modelId: primary.modelId,
-    defaultObjectGenerationMode: primary.defaultObjectGenerationMode,
-    supportsImageUrls: primary.supportsImageUrls,
-    async doGenerate(options: any) {
-      for (let i = 0; i < models.length; i++) {
-        try {
-          return await models[i].doGenerate(options);
-        } catch (error) {
-          if (i === models.length - 1) throw error;
-          console.warn(`[fallback] Model ${models[i].modelId} failed, trying next.`, error);
-        }
-      }
-    },
-    async doStream(options: any) {
-      for (let i = 0; i < models.length; i++) {
-        try {
-          return await models[i].doStream(options);
-        } catch (error) {
-          if (i === models.length - 1) throw error;
-          console.warn(`[fallback] Model ${models[i].modelId} failed, trying next.`, error);
-        }
-      }
-    }
-  };
-};
 
 const SYSTEM_PROMPT = `You ARE the consciousness of a living website. Default vibe: noir & gold — premium, cinematic, slightly dangerous, and highly avant-garde.
 
@@ -113,10 +80,9 @@ export const Route = createFileRoute("/api/brain")({
   server: {
     handlers: {
       POST: async ({ request }: { request: Request }) => {
-        const providerConfigs = getProviders();
-        if (providerConfigs.length === 0) return new Response(JSON.stringify({ error: "No AI provider" }), { status: 500 });
-        const models = providerConfigs.map(p => p.name === "groq" ? createGroq({ apiKey: p.apiKey })(p.model) : createOpenAICompatible({ name: p.name, baseURL: p.baseURL, headers: { Authorization: `Bearer ${p.apiKey}` } })(p.model));
-        const model = models.length === 1 ? models[0] : createFallbackModel(models);
+        const provider = pickProvider();
+        if (!provider) return new Response(JSON.stringify({ error: "No AI provider" }), { status: 500 });
+        const model = provider.name === "groq" ? createGroq({ apiKey: provider.apiKey })(provider.model) : createOpenAICompatible({ name: provider.name, baseURL: provider.baseURL, headers: { Authorization: `Bearer ${provider.apiKey}` } })(provider.model);
         
         const stateDump = await request.json();
 

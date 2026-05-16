@@ -28,44 +28,41 @@ import {
  *   - XAI_API_KEY         → xai grok    (default: grok-2-latest)
  *   - HUGGINGFACE_API_KEY → hf router   (default: meta-llama/Llama-3.3-70B-Instruct)
  */
-function getProviders() {
+function pickProvider() {
   const env = process.env;
-  const providers = [];
-  
-  if (env.GROQ_API_KEY) {
-    providers.push({
-      name: "groq" as const,
-      apiKey: env.GROQ_API_KEY,
-      baseURL: "https://api.groq.com/openai/v1",
-      model: env.GROQ_MODEL || "llama3-70b-8192",
-    });
-  }
   if (env.HUGGINGFACE_API_KEY) {
-    providers.push({
+    return {
       name: "huggingface" as const,
       apiKey: env.HUGGINGFACE_API_KEY,
       baseURL: "https://router.huggingface.co/v1",
       model: env.HUGGINGFACE_MODEL || "meta-llama/Llama-3.3-70B-Instruct",
-    });
+    };
+  }
+  if (env.GROQ_API_KEY) {
+    return {
+      name: "groq" as const,
+      apiKey: env.GROQ_API_KEY,
+      baseURL: "https://api.groq.com/openai/v1",
+      model: env.GROQ_MODEL || "llama3-70b-8192",
+    };
   }
   if (env.OPENROUTER_API_KEY) {
-    providers.push({
+    return {
       name: "openrouter" as const,
       apiKey: env.OPENROUTER_API_KEY,
       baseURL: "https://openrouter.ai/api/v1",
       model: env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free",
-    });
+    };
   }
   if (env.XAI_API_KEY) {
-    providers.push({
+    return {
       name: "xai" as const,
       apiKey: env.XAI_API_KEY,
       baseURL: "https://api.x.ai/v1",
       model: env.XAI_MODEL || "grok-2-latest",
-    });
+    };
   }
-  
-  return providers;
+  return null;
 }
 
 const PERSONALITIES = [
@@ -157,29 +154,25 @@ export const Route = createFileRoute("/api/chat")({
           return new Response("messages required", { status: 400 });
         }
 
-        const providerConfigs = getProviders();
-        if (providerConfigs.length === 0) {
+        const provider = pickProvider();
+        if (!provider) {
           return new Response(
             JSON.stringify({
               error:
-                "No AI provider configured. Add GROQ_API_KEY (recommended), OPENROUTER_API_KEY, XAI_API_KEY, or HUGGINGFACE_API_KEY in Settings → Secrets.",
+                "No AI provider configured. Add HUGGINGFACE_API_KEY (recommended), GROQ_API_KEY, OPENROUTER_API_KEY, or XAI_API_KEY in Settings → Secrets.",
             }),
             { status: 500, headers: { "Content-Type": "application/json" } },
           );
         }
 
-        const models = providerConfigs.map((p) =>
-          p.name === "groq"
-            ? createGroq({ apiKey: p.apiKey })(p.model)
+        const model =
+          provider.name === "groq"
+            ? createGroq({ apiKey: provider.apiKey })(provider.model)
             : createOpenAICompatible({
-                name: p.name,
-                baseURL: p.baseURL,
-                headers: { Authorization: `Bearer ${p.apiKey}` },
-              })(p.model)
-        );
-
-        // Fallback model logic: try primary, if it throws (e.g. 429), try the next in the array
-        const model = models.length === 1 ? models[0] : createFallbackModel(models);
+                name: provider.name,
+                baseURL: provider.baseURL,
+                headers: { Authorization: `Bearer ${provider.apiKey}` },
+              })(provider.model);
 
         const tools = {
           set_personality: tool({
@@ -270,38 +263,6 @@ export const Route = createFileRoute("/api/chat")({
           }),
         };
 
-        // Custom Fallback Language Model Wrapper
-        const createFallbackModel = (models: any[]) => {
-          if (models.length === 0) throw new Error("No models provided");
-          const primary = models[0];
-          return {
-            specificationVersion: "v1",
-            provider: "fallback-provider",
-            modelId: primary.modelId,
-            defaultObjectGenerationMode: primary.defaultObjectGenerationMode,
-            supportsImageUrls: primary.supportsImageUrls,
-            async doGenerate(options: any) {
-              for (let i = 0; i < models.length; i++) {
-                try {
-                  return await models[i].doGenerate(options);
-                } catch (error) {
-                  if (i === models.length - 1) throw error;
-                  console.warn(`[fallback] Model ${models[i].modelId} failed, trying next.`, error);
-                }
-              }
-            },
-            async doStream(options: any) {
-              for (let i = 0; i < models.length; i++) {
-                try {
-                  return await models[i].doStream(options);
-                } catch (error) {
-                  if (i === models.length - 1) throw error;
-                  console.warn(`[fallback] Model ${models[i].modelId} failed, trying next.`, error);
-                }
-              }
-            }
-          };
-        };
 
         const result = streamText({
           model,
