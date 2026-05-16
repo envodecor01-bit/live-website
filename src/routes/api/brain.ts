@@ -21,9 +21,9 @@ const DENSITIES = ["compact", "normal", "airy"] as const;
 
 function pickProvider() {
   const env = process.env;
+  if (env.OPENROUTER_API_KEY) return { name: "openrouter" as const, apiKey: env.OPENROUTER_API_KEY, baseURL: "https://openrouter.ai/api/v1", model: env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free" };
   if (env.HUGGINGFACE_API_KEY) return { name: "huggingface" as const, apiKey: env.HUGGINGFACE_API_KEY, baseURL: "https://router.huggingface.co/v1", model: env.HUGGINGFACE_MODEL || "meta-llama/Llama-3.3-70B-Instruct" };
   if (env.GROQ_API_KEY) return { name: "groq" as const, apiKey: env.GROQ_API_KEY, baseURL: "https://api.groq.com/openai/v1", model: env.GROQ_MODEL || "llama3-70b-8192" };
-  if (env.OPENROUTER_API_KEY) return { name: "openrouter" as const, apiKey: env.OPENROUTER_API_KEY, baseURL: "https://openrouter.ai/api/v1", model: env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free" };
   if (env.XAI_API_KEY) return { name: "xai" as const, apiKey: env.XAI_API_KEY, baseURL: "https://api.x.ai/v1", model: env.XAI_MODEL || "grok-2-latest" };
   return null;
 }

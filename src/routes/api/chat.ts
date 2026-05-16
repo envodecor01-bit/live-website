@@ -30,6 +30,14 @@ import {
  */
 function pickProvider() {
   const env = process.env;
+  if (env.OPENROUTER_API_KEY) {
+    return {
+      name: "openrouter" as const,
+      apiKey: env.OPENROUTER_API_KEY,
+      baseURL: "https://openrouter.ai/api/v1",
+      model: env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free",
+    };
+  }
   if (env.HUGGINGFACE_API_KEY) {
     return {
       name: "huggingface" as const,
@@ -44,14 +52,6 @@ function pickProvider() {
       apiKey: env.GROQ_API_KEY,
       baseURL: "https://api.groq.com/openai/v1",
       model: env.GROQ_MODEL || "llama3-70b-8192",
-    };
-  }
-  if (env.OPENROUTER_API_KEY) {
-    return {
-      name: "openrouter" as const,
-      apiKey: env.OPENROUTER_API_KEY,
-      baseURL: "https://openrouter.ai/api/v1",
-      model: env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct:free",
     };
   }
   if (env.XAI_API_KEY) {
